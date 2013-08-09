@@ -110,7 +110,7 @@ module.exports = function(grunt) {
 
 				if(task.gzip){
 					zlib.gzip(buffer, function(err, zipped){
-						upload = grunt.util._.extend({ContentType: type, ContentEncoding: 'gzip', Body: zippped, ContentLength: zipped.length, Key: task.dest}, s3_object);
+						upload = grunt.util._.extend({ContentType: type, ContentEncoding: 'gzip', Body: zipped, ContentLength: zipped.length, Key: task.dest}, s3_object);
 						callback(upload);
 					});
 				}

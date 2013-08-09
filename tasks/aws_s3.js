@@ -12,6 +12,7 @@ var path = require('path');
 var fs = require('fs');
 var AWS = require('aws-sdk');
 var mime = require('mime');
+var zlib = require('zlib');
 
 module.exports = function(grunt) {
 
@@ -67,11 +68,13 @@ module.exports = function(grunt) {
 
 		var dest;
 		var isExpanded;
+		var gzip;
 		var objects = [];
 
 		this.files.forEach(function(filePair) {
 			
 			isExpanded = filePair.orig.expand || false;
+			gzip = filePair.orig.gzip || false;
 
 			filePair.src.forEach(function(src) {
 				
@@ -85,13 +88,12 @@ module.exports = function(grunt) {
 				// '.' means that no dest path has been given (root).
 				// We do not need to create a '.' folder
 				if (dest !== '.') {
-					objects.push({src: src, dest: dest});
+					objects.push({src: src, dest: dest, gzip: gzip});
 				}
 			});
 		});
 
-		var queue = grunt.util.async.queue(function (task, callback) {
-			
+		var getUpload = function(task, callback){
 			var upload;
 
 			if (grunt.file.isDir(task.src)) {
@@ -100,15 +102,30 @@ module.exports = function(grunt) {
 				}
 
 				upload = grunt.util._.extend({Key: task.dest}, s3_object);
+				callback(upload);
 			}
 			else {
 				var type = mime.lookup(task.src);
 				var buffer = grunt.file.read(task.src, {encoding: null});
-				upload = grunt.util._.extend({ContentType: type, Body: buffer, Key: task.dest}, s3_object);
-			}
 
-			s3.putObject(upload, function(err, data) {
-				callback(err);
+				if(task.gzip){
+					zlib.gzip(buffer, function(err, zipped){
+						upload = grunt.util._.extend({ContentType: type, ContentEncoding: 'gzip', Body: zippped, ContentLength: zipped.length, Key: task.dest}, s3_object);
+						callback(upload);
+					});
+				}
+				else{
+					upload = grunt.util._.extend({ContentType: type, Body: buffer, Key: task.dest}, s3_object);
+					callback(upload);
+				}
+			}
+		};
+
+		var queue = grunt.util.async.queue(function (task, callback) {
+			getUpload(task, function(upload){
+				s3.putObject(upload, function(err, data) {
+					callback(err);
+				});
 			});
 		}, options.concurrency);
 
